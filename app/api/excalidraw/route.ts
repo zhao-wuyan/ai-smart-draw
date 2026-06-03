@@ -1,9 +1,14 @@
 import { streamText, convertToModelMessages } from "ai";
 import { z } from "zod/v3";
 import { resolveModel } from "@/lib/model-provider";
+import {
+    DIAGRAM_QUALITY_GUIDELINES,
+    getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 12_000;
 const MAX_OUTPUT_TOKENS_CAP = 24_000;
+const MAX_CONTEXT_MESSAGES = 8;
 
 export const maxDuration = 60;
 
@@ -23,6 +28,16 @@ Rules for interaction:
 - Use meaningful text labels and appropriate colors for elements
 - Maintain consistent styling across related elements
 
+${DIAGRAM_QUALITY_GUIDELINES}
+
+Excalidraw excellence rules:
+- Use Excalidraw's strengths: clean hand-drawn structure, readable labels, arrows, grouping, and lightweight annotations.
+- Build scenes with complete, valid element objects; include required fields consistently so the scene can render.
+- Keep related elements visually grouped and aligned; use arrows with clear start/end bindings when possible.
+- Use font sizes, stroke widths, fill colors, and roughness consistently to create a polished scene.
+- Keep the canvas focused within a reasonable viewport and avoid tiny text or far-away elements.
+- When transforming an existing scene, preserve element intent and update only the requested parts.
+
 Tool usage:
 - ALWAYS include a complete object: { "elements": [...], "appState": {...}, "files": {...} }
 - Provide the scene payload as a structured JSON object inside the tool call
@@ -39,7 +54,8 @@ Refer to the Excalidraw format guide for detailed information about the scene st
 - Use appState to define canvas properties like background color
 `;
 
-        const lastMessage = messages[messages.length - 1];
+        const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+        const lastMessage = recentMessages[recentMessages.length - 1];
         const lastMessageText =
             lastMessage.parts?.find((part: any) => part.type === "text")
                 ?.text || "";
@@ -56,9 +72,11 @@ User input:
 """md
 ${lastMessageText}
 """
+
+${getProfessionalDiagramGuidelines(lastMessageText)}
 `;
 
-        const modelMessages = convertToModelMessages(messages);
+        const modelMessages = convertToModelMessages(recentMessages);
         let enhancedMessages = [...modelMessages];
 
         if (enhancedMessages.length > 0) {

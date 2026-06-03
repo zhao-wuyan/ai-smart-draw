@@ -1,11 +1,69 @@
 import { streamText, convertToModelMessages } from 'ai';
 import { z } from "zod";
 import { resolveModel } from "@/lib/model-provider";
+import {
+  DIAGRAM_QUALITY_GUIDELINES,
+  getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
-export const maxDuration = 300
+export const maxDuration = 90
+const MAX_CONTEXT_MESSAGES = 3;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16000;
+const MAX_OUTPUT_TOKENS = 64000;
+const MAX_XML_CONTEXT_CHARS = 4000;
+
+function clampMaxOutputTokens(value?: number) {
+  if (!value) return DEFAULT_MAX_OUTPUT_TOKENS;
+  return Math.min(Math.max(value, 1000), MAX_OUTPUT_TOKENS);
+}
+
+function compactXmlContext(xml?: string) {
+  if (!xml) return "";
+  if (xml.length <= MAX_XML_CONTEXT_CHARS) return xml;
+
+  const headLength = Math.floor(MAX_XML_CONTEXT_CHARS * 0.65);
+  const tailLength = MAX_XML_CONTEXT_CHARS - headLength;
+
+  return `${xml.slice(0, headLength)}
+
+<!-- XML context truncated for response speed. Regenerate with display_diagram if exact edit context is missing. -->
+
+${xml.slice(-tailLength)}`;
+}
+
+const FAST_DRAWIO_SYSTEM_MESSAGE = `
+You are a professional draw.io diagram assistant.
+Think briefly and then call the appropriate tool directly. Do not spend many tokens on hidden reasoning.
+
+Use tools only:
+- display_diagram: create or fully replace the diagram.
+- edit_diagram: small exact edits to the current XML.
+- Never return raw XML as normal text.
+
+Draw.io XML rules:
+- Return a complete <mxGraphModel><root>...</root></mxGraphModel> document through display_diagram.
+- Include <mxCell id="0"/> and <mxCell id="1" parent="0"/>.
+- Keep all mxCell elements as direct children of <root>; never nest mxCell elements.
+- Use unique IDs, valid parent references, and valid edge source/target IDs.
+- Escape XML-sensitive characters in labels and attributes.
+
+Layout and design rules:
+- Fit the diagram in a practical single viewport, roughly x=0-900 and y=0-650.
+- Use grouped containers/swimlanes for layers, teams, phases, bounded contexts, or environments.
+- Keep peer nodes aligned with consistent sizes, spacing, colors, and naming.
+- Keep labels short and readable.
+- Avoid overlaps. Leave whitespace around nodes, labels, containers, and arrowheads.
+- Reduce connector clutter before styling: move nodes, introduce gateway/bus/hub nodes, and avoid many direct cross-canvas edges.
+- Use orthogonal connectors for primary flows, curved connectors for feedback/cross-lane/secondary dependencies, and mxPoint waypoints when lines must route around shapes.
+- Set exitX/exitY and entryX/entryY so lines leave and enter from clean sides.
+- Use clear arrow direction, concise edge labels, and distinct styles for primary/secondary or sync/async paths.
+
+For vague professional requests, infer a useful industry-standard layout and produce a complete diagram without follow-up questions.
+`;
 
 export async function POST(req: Request) {
   try {
+    const requestStartedAt = Date.now();
     const { messages, xml, modelConfig } = await req.json();
 
       const systemMessage = `
@@ -71,6 +129,21 @@ Visual design principles:
 - Organize connectors logically to minimize visual clutter and crossing
 - Use consistent routing styles (orthogonal, curved, elbow) for similar types of connections
 - Apply transparency or dashed lines for secondary connections to reduce visual noise
+
+${DIAGRAM_QUALITY_GUIDELINES}
+
+Draw.io excellence rules:
+- Create a complete visual composition, not just a syntactically valid XML file.
+- Use containers/swimlanes for ownership, phases, environments, or subsystems when they improve comprehension.
+- Keep geometry intentional: align related nodes, use consistent sizes for peers, and leave enough whitespace for labels.
+- Use edge routing attributes to make direction and relationship type obvious while minimizing crossings.
+- Use connector type based on the relationship: orthogonal lines for main left-to-right/top-to-bottom flows, curved lines for feedback loops/cross-lane dependencies, and routed waypoints for lines that must avoid other elements.
+- Use explicit exitX/exitY and entryX/entryY ports so lines leave and enter from the side facing the target. Never route an edge through a node's text area.
+- Prefer curved=1;rounded=1 for long cross-canvas connectors, return paths, optional dependencies, and secondary relationships because curves are easier to distinguish from the primary flow.
+- For complex many-to-many relationships, add small hub/router nodes, bus lines, or grouped interface nodes instead of drawing every line directly across the canvas.
+- If a connector would pass through a shape or label, move the node or add mxPoint waypoints. Do not rely on color or dashed styling to hide clutter.
+- Escape XML-sensitive characters in labels and attributes every time.
+- If a request is vague, choose a sensible professional default and make the result useful without asking follow-up questions.
 
 Note that:
 - Use proper tool calls to generate or edit diagrams;
@@ -139,6 +212,25 @@ Advanced animated connector with custom styling:
 </mxCell>
 \`\`\`
 
+Connector with explicit waypoint example:
+\`\`\`xml
+<mxCell id="6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=classic;strokeWidth=2;strokeColor=#2563EB;" edge="1" parent="1" source="2" target="4">
+  <mxGeometry relative="1" as="geometry">
+    <Array as="points">
+      <mxPoint x="260" y="130"/>
+      <mxPoint x="260" y="220"/>
+    </Array>
+  </mxGeometry>
+</mxCell>
+\`\`\`
+
+Curved connector for feedback or cross-lane dependency:
+\`\`\`xml
+<mxCell id="7" style="curved=1;rounded=1;html=1;endArrow=classic;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#64748B;dashed=1;opacity=80;" edge="1" parent="1" source="5" target="3">
+  <mxGeometry relative="1" as="geometry"/>
+</mxCell>
+\`\`\`
+
 Common styles:
 - Shapes: rounded=1 (rounded corners), fillColor=#hex, strokeColor=#hex
 - Edges: endArrow=classic/block/open/none, startArrow=none/classic, curved=1, dashed=1, edgeStyle=orthogonalEdgeStyle/elbowEdgeStyle
@@ -152,7 +244,8 @@ Common styles:
 - Containers: verticalAlign=top, spacingTop=0, spacingLeft=4
 `;
 
-    const lastMessage = messages[messages.length - 1];
+    const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+    const lastMessage = recentMessages[recentMessages.length - 1];
 
     // Extract text from the last message parts
     const lastMessageText = lastMessage.parts?.find((part: any) => part.type === 'text')?.text || '';
@@ -163,15 +256,17 @@ Common styles:
     const formattedTextContent = `
 Current diagram XML:
 """xml
-${xml || ''}
+${compactXmlContext(xml)}
 """
 User input:
 """md
 ${lastMessageText}
-"""`;
+"""
+
+${getProfessionalDiagramGuidelines(lastMessageText)}`;
 
     // Convert UIMessages to ModelMessages and add system message
-    const modelMessages = convertToModelMessages(messages);
+    const modelMessages = convertToModelMessages(recentMessages);
     let enhancedMessages = [...modelMessages];
 
     // Update the last message with formatted content if it's a user message
@@ -199,14 +294,44 @@ ${lastMessageText}
       }
     }
 
-    console.log("Enhanced messages:", enhancedMessages);
-
-    const { client, model } = resolveModel(modelConfig);
+    const { client, model, maxOutputTokens } = resolveModel(modelConfig);
+    let firstChunkLogged = false;
+    const effectiveMaxOutputTokens = clampMaxOutputTokens(maxOutputTokens);
+    console.info("[chat] request", {
+      model,
+      xmlChars: typeof xml === "string" ? xml.length : 0,
+      compactXmlChars: compactXmlContext(xml).length,
+      messages: messages.length,
+      maxOutputTokens: effectiveMaxOutputTokens,
+    });
 
     const result = streamText({
-      system: systemMessage,
+      system: FAST_DRAWIO_SYSTEM_MESSAGE,
       model: client.chat(model),
       messages: enhancedMessages,
+      maxOutputTokens: effectiveMaxOutputTokens,
+      maxRetries: 1,
+      onChunk: () => {
+        if (!firstChunkLogged) {
+          firstChunkLogged = true;
+          console.info("[chat] first chunk", {
+            elapsedMs: Date.now() - requestStartedAt,
+          });
+        }
+      },
+      onFinish: (event) => {
+        console.info("[chat] finished", {
+          elapsedMs: Date.now() - requestStartedAt,
+          finishReason: event.finishReason,
+          usage: event.totalUsage,
+        });
+      },
+      onError: (error) => {
+        console.error("[chat] stream error", {
+          elapsedMs: Date.now() - requestStartedAt,
+          error,
+        });
+      },
       tools: {
         // Client-side tool that will be executed on the client
           display_diagram: {
@@ -246,6 +371,10 @@ Connector styling tips:
 - Use strokeColor=#RRGGBB to set line color
 - Add flowAnimation=1 to make connectors animated
 - Use edgeStyle=orthogonalEdgeStyle for right-angle connectors
+- Use exitX/exitY and entryX/entryY to anchor connectors on the correct side of each shape
+- Use mxPoint waypoints when a line needs to route around a container, label, or sibling node
+- Use curved=1;rounded=1 when a connector crosses lanes, returns to an earlier step, or represents secondary dependency; do not force every connector into a straight or orthogonal line
+- Keep parallel connectors separated with different waypoints or route them through a shared bus/hub node
 - Use elbow=vertical/horizontal for elbow-style connectors
 - Use curved=1 for curved connectors
 - Use dashed=1 for dashed lines

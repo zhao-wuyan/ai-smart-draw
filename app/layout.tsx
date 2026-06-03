@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { DiagramProvider } from "@/contexts/diagram-context";
 import { ModelConfigProvider } from "@/contexts/model-config-context";
-import { KrokiProvider } from "@/contexts/kroki-context";
 import "@excalidraw/excalidraw/index.css";
 
 import "./globals.css";
@@ -22,7 +21,7 @@ export default function RootLayout({
             <body className="antialiased">
                 <DiagramProvider>
                     <ModelConfigProvider>
-                        <KrokiProvider>{children}</KrokiProvider>
+                        {children}
                     </ModelConfigProvider>
                 </DiagramProvider>
 

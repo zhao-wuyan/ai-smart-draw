@@ -1,8 +1,13 @@
 import { streamText, convertToModelMessages } from "ai";
 import { z } from "zod/v3";
 import { resolveModel } from "@/lib/model-provider";
+import {
+    DIAGRAM_QUALITY_GUIDELINES,
+    getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
 export const maxDuration = 60;
+const MAX_CONTEXT_MESSAGES = 8;
 
 export async function POST(req: Request) {
     try {
@@ -20,13 +25,27 @@ Rules of engagement:
 - Use subgraphs/sections to keep complex diagrams readable.
 - Never return Mermaid code directly in text responses.
 
+${DIAGRAM_QUALITY_GUIDELINES}
+
+Mermaid excellence rules:
+- Choose the Mermaid diagram type that best matches the user's intent instead of defaulting to flowchart.
+- For flowcharts, prefer a single clear direction (TD/LR) and use subgraph blocks for phases, teams, layers, or bounded contexts.
+- Order node declarations and edges to match the visual reading direction, keeping related nodes inside the same subgraph to reduce crossing edges.
+- For dense relationships, introduce aggregator nodes such as Gateway, Event Bus, Queue, or Shared Interface instead of connecting every node to every other node.
+- Use Mermaid link variants intentionally: reserve thick/solid arrows for primary flow, dotted arrows for secondary/optional dependencies, and avoid long diagonal-looking cross-subgraph links when a hub node would be clearer.
+- Quote labels that contain punctuation, parentheses, slashes, or non-trivial text to avoid parse errors.
+- Use classDef/class assignments sparingly to create consistent visual hierarchy without making the code noisy.
+- Avoid unsupported syntax for the likely Mermaid renderer; favor broadly compatible Mermaid constructs.
+- Validate mentally that every edge references an existing node and every subgraph is closed.
+
 Tool contract:
 - You must trigger exactly one display_mermaid tool call per assistant turn.
 - Include the full diagram definition inside that tool call.
 - Optionally include a short summary describing the key changes.
 `;
 
-        const lastMessage = messages[messages.length - 1];
+        const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+        const lastMessage = recentMessages[recentMessages.length - 1];
         const lastMessageText =
             lastMessage.parts?.find((part: any) => part.type === "text")
                 ?.text || "";
@@ -43,9 +62,11 @@ User input:
 """md
 ${lastMessageText}
 """
+
+${getProfessionalDiagramGuidelines(lastMessageText)}
 `;
 
-        const modelMessages = convertToModelMessages(messages);
+        const modelMessages = convertToModelMessages(recentMessages);
         let enhancedMessages = [...modelMessages];
 
         if (enhancedMessages.length > 0) {

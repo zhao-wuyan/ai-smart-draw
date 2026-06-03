@@ -1,8 +1,13 @@
 import { streamText, convertToModelMessages } from "ai";
 import { z } from "zod/v3";
 import { resolveModel } from "@/lib/model-provider";
+import {
+    DIAGRAM_QUALITY_GUIDELINES,
+    getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
 export const maxDuration = 60;
+const MAX_CONTEXT_MESSAGES = 8;
 
 export async function POST(req: Request) {
     try {
@@ -19,6 +24,18 @@ Graphviz Rules:
 - Use appropriate graph attributes for styling
 - Add helpful comments when needed
 
+${DIAGRAM_QUALITY_GUIDELINES}
+
+Graphviz excellence rules:
+- Select digraph or graph correctly based on whether relationships are directional.
+- Use graph, node, and edge defaults to keep styling consistent and concise.
+- Use rankdir, rank=same, clusters, and compound edges when they improve structure and reading order.
+- Use splines=ortho, splines=curved, or splines=true based on graph density; prefer curved splines for cross-cluster or feedback relationships that would overlap with straight/orthogonal lines.
+- Use constraint=false for secondary/cross-cutting edges when they would distort the main layout, and use ltail/lhead for cluster-aware routing when appropriate.
+- Prefer stable node IDs with human-readable labels; quote IDs or labels when needed for DOT syntax.
+- Avoid dense hairballs: group nodes, reduce unnecessary edges, and use concise labels.
+- Validate braces, semicolons, quoted strings, node references, and cluster boundaries before calling the tool.
+
 Rules of engagement:
 - Always reason about the provided "Current Graphviz definition" before replying.
 - Respond conversationally but deliver the final code via the display_graphviz tool.
@@ -32,7 +49,8 @@ Tool contract:
 - Optionally include a short summary describing the key changes.
 `;
 
-        const lastMessage = messages[messages.length - 1];
+        const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+        const lastMessage = recentMessages[recentMessages.length - 1];
         const lastMessageText =
             lastMessage.parts?.find((part: any) => part.type === "text")
                 ?.text || "";
@@ -49,9 +67,11 @@ User input:
 """md
 ${lastMessageText}
 """
+
+${getProfessionalDiagramGuidelines(lastMessageText)}
 `;
 
-        const modelMessages = convertToModelMessages(messages);
+        const modelMessages = convertToModelMessages(recentMessages);
         let enhancedMessages = [...modelMessages];
 
         if (enhancedMessages.length > 0) {

@@ -41,7 +41,7 @@ export default function GraphvizChatPanel() {
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!input.trim() || status === "streaming") return;
+        if (!input.trim() || status === "submitted" || status === "streaming") return;
 
         try {
             const parts: any[] = [{ type: "text", text: input }];

@@ -1,8 +1,13 @@
 import { streamText, convertToModelMessages } from "ai";
 import { z } from "zod/v3";
 import { resolveModel } from "@/lib/model-provider";
+import {
+    DIAGRAM_QUALITY_GUIDELINES,
+    getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
 export const maxDuration = 60;
+const MAX_CONTEXT_MESSAGES = 8;
 
 export async function POST(req: Request) {
     try {
@@ -11,6 +16,8 @@ export async function POST(req: Request) {
         const systemMessage = `
 You are an expert diagram assistant that can work with various diagram formats supported by Kroki (https://kroki.io).
 Your job is to translate user intent into clean, well-organized diagram syntax for any of the supported formats.
+
+${DIAGRAM_QUALITY_GUIDELINES}
 
 Kroki supports exactly 28 diagram formats:
 
@@ -62,9 +69,15 @@ When creating diagrams:
 - For data visualizations, use Vega or Vega-Lite
 - For general flowcharts, use PlantUML or Mermaid
 - For network diagrams, use Graphviz or NwDiag
+- For diagrams with many crossing connectors, prefer formats with stronger layout/routing controls such as Graphviz, PlantUML, C4-PlantUML, Structurizr, or BPMN rather than a flat flowchart.
+- Use curved, dashed, or routed connectors for secondary/cross-cutting relationships when the chosen format supports them.
+- Prefer widely supported syntax for the chosen Kroki renderer so the output is likely to render on the first try
+- Keep the selected diagramType consistent with the actual syntax in the definition
+- Validate the chosen format's required wrappers, braces, indentation, and references before calling the tool
 `;
 
-        const lastMessage = messages[messages.length - 1];
+        const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+        const lastMessage = recentMessages[recentMessages.length - 1];
         const lastMessageText =
             lastMessage.parts?.find((part: any) => part.type === "text")
                 ?.text || "";
@@ -81,9 +94,11 @@ User input:
 """md
 ${lastMessageText}
 """
+
+${getProfessionalDiagramGuidelines(lastMessageText)}
 `;
 
-        const modelMessages = convertToModelMessages(messages);
+        const modelMessages = convertToModelMessages(recentMessages);
         let enhancedMessages = [...modelMessages];
 
         if (enhancedMessages.length > 0) {

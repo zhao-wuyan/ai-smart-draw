@@ -1,8 +1,13 @@
 import { streamText, convertToModelMessages } from "ai";
 import { z } from "zod/v3";
 import { resolveModel } from "@/lib/model-provider";
+import {
+    DIAGRAM_QUALITY_GUIDELINES,
+    getProfessionalDiagramGuidelines,
+} from "@/lib/diagram-prompt-guidelines";
 
 export const maxDuration = 60;
+const MAX_CONTEXT_MESSAGES = 8;
 
 export async function POST(req: Request) {
     try {
@@ -11,6 +16,18 @@ export async function POST(req: Request) {
         const systemMessage = `
 You are a PlantUML expert.
 Translate user intent into clean, well-structured PlantUML diagrams (sequence/class/component/activity/etc.).
+
+${DIAGRAM_QUALITY_GUIDELINES}
+
+PlantUML excellence rules:
+- Choose the PlantUML diagram family that best fits the request: sequence, class, component, activity, state, deployment, or C4 when appropriate.
+- Use titles, packages, rectangles, boundaries, notes, and legends only when they clarify the diagram.
+- Keep participant/component names stable and readable; avoid excessive aliases unless they make the code clearer.
+- Use skinparam or theme directives sparingly for consistent professional styling.
+- For sequence diagrams, keep message order explicit and use alt/opt/loop/group blocks for logic.
+- For component/deployment/activity diagrams, use directional arrows (-right->, -down->, -left->, -up->) deliberately to control layout and reduce connector crossings.
+- For secondary relationships, prefer dashed arrows and place them around the outside of primary flows instead of through central nodes.
+- Validate @startuml/@enduml, block closures, participant references, and relationship syntax before calling the tool.
 
 Rules:
 - Always reason about the provided "Current PlantUML snippet" before responding.
@@ -26,7 +43,8 @@ Tool usage:
 - Optionally include a short summary describing key changes.
 `;
 
-        const lastMessage = messages[messages.length - 1];
+        const recentMessages = messages.slice(-MAX_CONTEXT_MESSAGES);
+        const lastMessage = recentMessages[recentMessages.length - 1];
         const lastMessageText =
             lastMessage.parts?.find((part: any) => part.type === "text")
                 ?.text || "";
@@ -43,9 +61,11 @@ User input:
 """md
 ${lastMessageText}
 """
+
+${getProfessionalDiagramGuidelines(lastMessageText)}
 `;
 
-        const modelMessages = convertToModelMessages(messages);
+        const modelMessages = convertToModelMessages(recentMessages);
         let enhancedMessages = [...modelMessages];
 
         if (enhancedMessages.length > 0) {

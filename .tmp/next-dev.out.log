@@ -1,0 +1,10 @@
+
+> ai-smart-draw@0.1.0 dev
+> next dev --turbopack --port 6002
+
+   ▲ Next.js 15.4.7 (Turbopack)
+   - Local:        http://localhost:6002
+   - Network:      http://10.20.0.1:6002
+   - Environments: .env.local
+
+ ✓ Starting...

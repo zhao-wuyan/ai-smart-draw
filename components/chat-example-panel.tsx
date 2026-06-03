@@ -51,22 +51,26 @@ export default function ExamplePanel({
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
                     onClick={() =>
-                        setInput("帮我设计微服务的架构图")
+                        setInput("帮我设计一个电商高并发微服务架构图，包含网关、缓存、消息队列、数据库和监控")
                     }
                 >
-                    帮我设计微服务的架构图
+                    电商高并发微服务架构图
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
-                    onClick={() => setInput("帮我设计一个订单流程")}
+                    onClick={() =>
+                        setInput("帮我设计一个订单从下单、支付到履约的业务流程图，包含异常、退款和通知分支")
+                    }
                 >
-                    帮我设计一个订单流程
+                    订单支付履约业务流程图
                 </button>
                 <button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"
-                    onClick={() => setInput("帮我画一只卡通机器猫")}
+                    onClick={() =>
+                        setInput("帮我设计一个实时数据管道架构图，包含数据采集、消息队列、流处理、数仓、质量校验和监控")
+                    }
                 >
-                    帮我画一只卡通机器猫
+                    实时数据管道架构图
                 </button>
                 {/*<button
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-2 rounded"

@@ -46,7 +46,6 @@ export default function Home() {
 
     // Handle the load event from draw.io
     const handleDrawioLoad = (data: any) => {
-        console.log('Draw.io loaded:', data);
         setIsDrawIoLoaded(true);
     };
 
@@ -56,14 +55,11 @@ export default function Home() {
         const exportPurposeFromAttr = document.body.getAttribute('data-export-purpose');
         const isFileExport = exportPurpose === 'file' || exportPurposeFromAttr === 'file';
         
-        console.log('handleDrawioExport called, exportPurpose:', exportPurpose, 'exportPurposeFromAttr:', exportPurposeFromAttr);
-        
         // Call the original export handler first
         handleDiagramExport(data);
         
         // Only handle file download when purpose is 'file'
         if (isFileExport) {
-            console.log('Processing file export');
             try {
                 // Extract the XML part for .drawio file
                 const xmlContent = extractDiagramXML(data.data);

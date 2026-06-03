@@ -1,16 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X, Github } from "lucide-react";
-import ChatPanel from "@/components/chat-panel";
-import ExcalidrawChatPanel from "@/components/excalidraw-chat-panel";
-import MermaidChatPanel from "@/components/mermaid-chat-panel";
-import PlantUMLChatPanel from "@/components/plantuml-chat-panel";
-import KrokiChatPanel from "@/components/kroki-chat-panel";
-import GraphvizChatPanel from "@/components/graphviz-chat-panel";
 import { ModelConfigDialog } from "@/components/model-config-dialog";
-import { useModelConfig } from "@/contexts/model-config-context";
 import { cn } from "@/lib/utils";
 
 type PanelType = "drawio" | "excalidraw" | "mermaid" | "plantuml" | "kroki" | "graphviz";
@@ -21,13 +15,43 @@ interface CollapsibleChatPanelProps {
   onCollapseChange?: (collapsed: boolean) => void;
 }
 
+const ChatPanel = dynamic(() => import("@/components/chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+const ExcalidrawChatPanel = dynamic(() => import("@/components/excalidraw-chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+const MermaidChatPanel = dynamic(() => import("@/components/mermaid-chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+const PlantUMLChatPanel = dynamic(() => import("@/components/plantuml-chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+const KrokiChatPanel = dynamic(() => import("@/components/kroki-chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+const GraphvizChatPanel = dynamic(() => import("@/components/graphviz-chat-panel"), {
+  loading: () => <PanelLoading />,
+});
+
+function PanelLoading() {
+  return (
+    <div className="h-full rounded-none border bg-white p-4">
+      <div className="h-8 w-32 animate-pulse rounded bg-muted" />
+      <div className="mt-6 space-y-3">
+        <div className="h-12 animate-pulse rounded bg-muted/70" />
+        <div className="h-12 w-5/6 animate-pulse rounded bg-muted/70" />
+      </div>
+    </div>
+  );
+}
+
 export function CollapsibleChatPanel({ 
   type,
   className = "",
   onCollapseChange
 }: CollapsibleChatPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { activeProfile } = useModelConfig();
 
   useEffect(() => {
     onCollapseChange?.(isCollapsed);
@@ -59,10 +83,11 @@ export function CollapsibleChatPanel({
         <div className={cn("absolute right-4 top-20 z-50", className)}>
           <Button
             onClick={() => setIsCollapsed(false)}
-            className="rounded-full shadow-lg h-12 w-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white transition-all duration-300 animate-pulse font-bold text-lg"
+            className="rounded-full shadow-lg h-12 w-12 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-colors"
             size="icon"
+            title="打开聊天区"
           >
-            AI
+            <MessageCircle className="h-5 w-5" />
           </Button>
         </div>
       )}

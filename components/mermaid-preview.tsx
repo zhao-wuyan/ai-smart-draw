@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, RefreshCcw, Download, Grid3X3, PenTool } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const RENDER_DEBOUNCE_MS = 180;
+let mermaidModulePromise: Promise<any> | null = null;
+
+function loadMermaid() {
+    mermaidModulePromise ??= import("mermaid").then((module) => {
+        return (module as any)?.default ?? module;
+    });
+    return mermaidModulePromise;
+}
+
 interface MermaidPreviewProps {
     definition: string;
     className?: string;
@@ -17,6 +27,7 @@ export function MermaidPreview({
     const [mermaidAPI, setMermaidAPI] = useState<any>(null);
     const [svg, setSvg] = useState<string>("");
     const [renderError, setRenderError] = useState<string | null>(null);
+    const [isRendering, setIsRendering] = useState(false);
 
     const [zoom, setZoom] = useState(1);
     const [showGrid, setShowGrid] = useState(true);
@@ -30,17 +41,15 @@ export function MermaidPreview({
 
     useEffect(() => {
         let isMounted = true;
-        import("mermaid")
+        loadMermaid()
             .then((module) => {
                 if (!isMounted) return;
-                const instance = (module as any)?.default ?? module;
-                instance.initialize({
+                module.initialize({
                     startOnLoad: false,
                     securityLevel: "loose",
                     theme: "neutral",
-                    look: handDrawn ? "handDrawn" : "classic",
                 });
-                setMermaidAPI(instance);
+                setMermaidAPI(module);
             })
             .catch((error) => {
                 console.error("Failed to load Mermaid:", error);
@@ -52,21 +61,22 @@ export function MermaidPreview({
         return () => {
             isMounted = false;
         };
-    }, [handDrawn]);
+    }, []);
 
     useEffect(() => {
         if (!mermaidAPI) return;
         if (!definition.trim()) {
             setSvg("");
             setRenderError("等待 Mermaid 内容…");
+            setIsRendering(false);
             return;
         }
 
         let cancelled = false;
+        setIsRendering(true);
+        setRenderError(null);
 
-        // 使用 setTimeout 确保定义完全加载后再渲染
         const timer = setTimeout(() => {
-            // 重新初始化以应用配置更改
             mermaidAPI.initialize({
                 startOnLoad: false,
                 securityLevel: "loose",
@@ -80,19 +90,22 @@ export function MermaidPreview({
                     if (!cancelled) {
                         setSvg(svg);
                         setRenderError(null);
+                        setIsRendering(false);
                     }
                 })
                 .catch((error: unknown) => {
                     console.error("Mermaid render error:", error);
                     if (!cancelled) {
+                        setSvg("");
                         setRenderError(
                             error instanceof Error
                                 ? error.message
                                 : "无法渲染 Mermaid 图。"
                         );
+                        setIsRendering(false);
                     }
                 });
-        }, 500); // 延迟 500ms 确保定义完全加载
+        }, RENDER_DEBOUNCE_MS);
 
         return () => {
             cancelled = true;
@@ -198,6 +211,14 @@ export function MermaidPreview({
                     backgroundSize: "20px 20px",
                 } : {}}
             >
+                <div
+                    className={cn(
+                        "absolute left-4 top-4 z-10 rounded border bg-white/90 px-2 py-1 text-xs text-muted-foreground shadow-sm transition-opacity pointer-events-none",
+                        isRendering ? "opacity-100" : "opacity-0"
+                    )}
+                >
+                    Rendering diagram...
+                </div>
                 {renderError ? (
                     <div className="h-full flex items-center justify-center text-red-500 text-sm text-center px-4">
                         {renderError}

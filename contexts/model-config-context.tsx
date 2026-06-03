@@ -51,41 +51,54 @@ function generateId() {
     return `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function ModelConfigProvider({ children }: { children: React.ReactNode }) {
-    const [profiles, setProfiles] = useState<ModelProfile[]>([defaultProfile]);
-    const [activeProfileId, setActiveProfileId] = useState<string>(defaultProfile.id);
+function loadInitialModelConfig() {
+    const fallback = {
+        profiles: [defaultProfile],
+        activeProfileId: defaultProfile.id,
+    };
 
-    // Load from localStorage on mount
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored) as {
-                    profiles: ModelProfile[];
-                    activeProfileId: string;
-                };
-                if (parsed?.profiles?.length) {
-                    setProfiles(parsed.profiles);
-                    setActiveProfileId(parsed.activeProfileId || parsed.profiles[0].id);
-                    return;
-                }
-            }
+    if (typeof window === "undefined") {
+        return fallback;
+    }
 
-            // migrate legacy single config if exists
-            const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-            if (legacy) {
-                const parsedLegacy = JSON.parse(legacy) as ModelConfig;
-                const migrated: ModelProfile = {
-                    ...defaultProfile,
-                    config: { ...defaultModelConfig, ...parsedLegacy },
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored) as {
+                profiles: ModelProfile[];
+                activeProfileId: string;
+            };
+            if (parsed?.profiles?.length) {
+                return {
+                    profiles: parsed.profiles,
+                    activeProfileId: parsed.activeProfileId || parsed.profiles[0].id,
                 };
-                setProfiles([migrated]);
-                setActiveProfileId(migrated.id);
             }
-        } catch (error) {
-            console.warn("Failed to load model config from storage", error);
         }
-    }, []);
+
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy) {
+            const parsedLegacy = JSON.parse(legacy) as ModelConfig;
+            const migrated: ModelProfile = {
+                ...defaultProfile,
+                config: { ...defaultModelConfig, ...parsedLegacy },
+            };
+            return {
+                profiles: [migrated],
+                activeProfileId: migrated.id,
+            };
+        }
+    } catch (error) {
+        console.warn("Failed to load model config from storage", error);
+    }
+
+    return fallback;
+}
+
+export function ModelConfigProvider({ children }: { children: React.ReactNode }) {
+    const [initialState] = useState(loadInitialModelConfig);
+    const [profiles, setProfiles] = useState<ModelProfile[]>(initialState.profiles);
+    const [activeProfileId, setActiveProfileId] = useState<string>(initialState.activeProfileId);
 
     // Persist to localStorage whenever profiles or activeProfileId changes
     useEffect(() => {

@@ -13,6 +13,7 @@ import { useDiagram } from "@/contexts/diagram-context";
 interface ChatMessageDisplayProps {
     messages: UIMessage[];
     error?: Error | null;
+    status: "submitted" | "streaming" | "ready" | "error";
     setInput: (input: string) => void;
     setFiles: (files: File[]) => void;
 }
@@ -20,6 +21,7 @@ interface ChatMessageDisplayProps {
 export function ChatMessageDisplay({
     messages,
     error,
+    status,
     setInput,
     setFiles,
 }: ChatMessageDisplayProps) {
@@ -175,6 +177,12 @@ export function ChatMessageDisplay({
 
     // New function to render an immediate tool preview when user sends a message
     const renderImmediateToolPreview = () => {
+        const isWaiting = status === "submitted" || status === "streaming";
+
+        if (!isWaiting || error) {
+            return null;
+        }
+
         return (
             <div className="p-4 my-2 text-gray-500 border border-gray-300 rounded" style={{ maxWidth: "300px" }}>
                 <div className="flex flex-col gap-2">
@@ -184,7 +192,7 @@ export function ChatMessageDisplay({
                     <div className="mt-2 text-sm">
                         <div className="flex items-center text-blue-600">
                             <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
-                            正在努力生成回答请稍候...
+                            正在生成，复杂专业图通常需要 10-60 秒...
                         </div>
                     </div>
                 </div>
@@ -255,7 +263,7 @@ export function ChatMessageDisplay({
             )}
             {error && (
                 <div className="text-red-500 text-sm mt-2">
-                    Error: {error.message}
+                    生成失败：{error.message || "请求超时或模型服务无响应，请稍后重试。"}
                 </div>
             )}
             <div ref={messagesEndRef} />

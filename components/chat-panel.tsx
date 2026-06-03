@@ -31,18 +31,30 @@ export default function ChatPanel() {
     } = useDiagram();
     const { config: modelConfig } = useModelConfig();
 
-    const onFetchChart = () => {
-        return Promise.race([
-            new Promise<string>((resolve) => {
-                if (resolverRef && "current" in resolverRef) {
-                    resolverRef.current = resolve;
+    const onFetchChart = (timeoutMs = 1500) => {
+        return new Promise<string>((resolve, reject) => {
+            let settled = false;
+            const resolver = (value: string) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(value);
+            };
+
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                if (resolverRef && "current" in resolverRef && resolverRef.current === resolver) {
+                    resolverRef.current = null;
                 }
-                onExport('chat');
-            }),
-            new Promise<string>((_, reject) =>
-                setTimeout(() => reject(new Error("Chart export timed out after 10 seconds")), 10000)
-            )
-        ]);
+                reject(new Error(`Chart export timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+
+            if (resolverRef && "current" in resolverRef) {
+                resolverRef.current = resolver;
+            }
+            onExport('chat');
+        });
     };
     // Add a step counter to track updates
 
@@ -124,10 +136,18 @@ export default function ChatPanel() {
 
     const onFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (input.trim() && status !== "streaming") {
+        if (input.trim() && status !== "submitted" && status !== "streaming") {
             try {
                 // Fetch chart data before sending message
-                let chartXml = await onFetchChart();
+                let chartXml = chartXML;
+                try {
+                    chartXml = await onFetchChart();
+                } catch (error) {
+                    if (!chartXml) {
+                        throw error;
+                    }
+                    console.warn("Using cached chart XML because live export failed", error);
+                }
 
                 // Format the XML to ensure consistency
                 chartXml = formatXML(chartXml);
@@ -197,6 +217,7 @@ export default function ChatPanel() {
                 <ChatMessageDisplay
                     messages={messages}
                     error={error}
+                    status={status}
                     setInput={setInput}
                     setFiles={handleFileChange}
                 />

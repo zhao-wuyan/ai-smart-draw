@@ -45,6 +45,7 @@ export function ChatInput({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [showClearDialog, setShowClearDialog] = useState(false);
+    const isBusy = status === "submitted" || status === "streaming";
 
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
@@ -62,14 +63,14 @@ export function ChatInput({
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
             const form = e.currentTarget.closest("form");
-            if (form && input.trim() && status !== "streaming") {
+            if (form && input.trim() && !isBusy) {
                 form.requestSubmit();
             }
         }
     };
 
     const handlePaste = async (e: React.ClipboardEvent) => {
-        if (status === "streaming") return;
+        if (isBusy) return;
 
         const items = e.clipboardData.items;
         const imageItems = Array.from(items).filter((item) =>
@@ -133,7 +134,7 @@ export function ChatInput({
         e.stopPropagation();
         setIsDragging(false);
 
-        if (status === "streaming") return;
+        if (isBusy) return;
 
         const droppedFiles = e.dataTransfer.files;
         const imageFiles = Array.from(droppedFiles).filter((file) =>
@@ -171,7 +172,7 @@ export function ChatInput({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder="描述您需要的图表修改内容，或粘贴/上传图片进行复制。按Cmd/Ctrl+Enter键发送。"
-                disabled={status === "streaming"}
+                disabled={isBusy}
                 aria-label="Chat input"
                 className="min-h-[80px] resize-none transition-all duration-200 px-1 py-0"
             />
@@ -200,7 +201,7 @@ export function ChatInput({
                             variant="outline"
                             size="icon"
                             onClick={onRequestHistory}
-                            disabled={status === "streaming" || !historyAvailable}
+                            disabled={isBusy || !historyAvailable}
                             tooltipContent={historyTooltip}
                         >
                             <History className="h-4 w-4" />
@@ -213,7 +214,7 @@ export function ChatInput({
                         variant="outline"
                         size="icon"
                         onClick={triggerFileInput}
-                        disabled={status === "streaming"}
+                        disabled={isBusy}
                         title="Upload reference image"
                     >
                         <ImageIcon className="h-4 w-4" />
@@ -226,21 +227,21 @@ export function ChatInput({
                         onChange={handleFileChange}
                         accept="image/*"
                         multiple
-                        disabled={status === "streaming"}
+                        disabled={isBusy}
                     />
                 </div>
 
                 <Button
                     type="submit"
-                    disabled={status === "streaming" || !input.trim()}
+                    disabled={isBusy || !input.trim()}
                     className="transition-opacity"
                     aria-label={
-                        status === "streaming"
+                        isBusy
                             ? "Sending message..."
                             : "Send message"
                     }
                 >
-                    {status === "streaming" ? (
+                    {isBusy ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                         <Send className="mr-2 h-4 w-4" />

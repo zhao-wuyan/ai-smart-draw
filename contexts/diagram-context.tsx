@@ -33,7 +33,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const handleExport = (purpose: 'chat' | 'file' = 'chat') => {
         // Store the purpose for the export handler
-        console.log('handleExport called with purpose:', purpose);
         setExportPurpose(purpose);
         
         // For file export, we need a different approach to ensure the export event
@@ -49,12 +48,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (drawioRef.current) {
-            console.log('Calling exportDiagram');
             drawioRef.current.exportDiagram({
                 format: "xmlsvg",
             });
-        } else {
-            console.log('drawioRef.current is null');
         }
     };
 
@@ -67,12 +63,10 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleDiagramExport = (data: any) => {
-        console.log('handleDiagramExport called, exportPurpose:', exportPurpose);
         const extractedXML = extractDiagramXML(data.data);
         
         // 只有在聊天导出时才更新状态，避免文件导出时干扰
         if (exportPurpose === 'chat') {
-            console.log('Updating chat state');
             setChartXML(extractedXML);
             setLatestSvg(data.data);
             setDiagramHistory((prev) => [
@@ -115,7 +109,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     const exportDiagramFile = () => {
         // Trigger the export from draw.io for file export
-        console.log('exportDiagramFile called, setting purpose to file');
         handleExport('file');
     };
 
